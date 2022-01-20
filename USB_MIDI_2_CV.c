@@ -24,10 +24,49 @@ USB_ClassInfo_MIDI_Device_t Keyboard_MIDI_Interface =
 			},
 	};
 
+    /*
+     Board pins
+     * D0-D7 - Vcc for Leds - X
+     * D8-D13, a0, a1 - GND for Leds - Y
+     * 
+     * Mapping to Ports
+     * D0      - PD2 xx
+     * D1      - PD3 xx
+     * D2      - PD1 xx
+     * D3      - PD0 xx
+     * D4/A6   - PD4 xx
+     * D5      - PC6 xx
+     * D6/A7   - PD7 xx
+     * D7      - PE6 xx
+     * 
+     * D8      - PB4 xa
+     * D9/A8   - PB5 xa
+     * D10     - PB6 xa
+     * D11     - PB7 xa
+     * D12/A10 - PD6 xa
+     * D13     - PC7 x
+     * 
+     * A0 - PF7 o
+     * A1 - PF6 o
+     * A2 - PF5 -
+     * A3 - PF4 -
+     * A4 - PF1 -
+     * A5 - PF0 -
+     * 
+     * PD5 - LED on 0
+     * PB0 - LED on 0
+     */
+
 int main(void)
 {
 	SetupHardware();
 	GlobalInterruptEnable(); //Check if we need this for USB
+
+	DDRD |= 0b00100000;
+	PORTD |= 0x20; //LED OFF
+
+	DDRB |= 0b00000001;
+	PORTB |= 0x01;
 
 	for (;;)
 	{
@@ -36,11 +75,19 @@ int main(void)
 		{
 			if ((ReceivedMIDIEvent.Event == MIDI_EVENT(0, MIDI_COMMAND_NOTE_ON)) && ((ReceivedMIDIEvent.Data1 & 0x0F) == 0))
 			{
-				
+				PORTD &= ~0x20;					
 			}
 			else if ((ReceivedMIDIEvent.Event == MIDI_EVENT(0, MIDI_COMMAND_NOTE_OFF)) && ((ReceivedMIDIEvent.Data1 & 0x0F) == 0))
 			{
-				
+				PORTD |= 0x20;
+			}
+			else if ((ReceivedMIDIEvent.Event == MIDI_EVENT(1, MIDI_COMMAND_NOTE_ON)) && ((ReceivedMIDIEvent.Data1 & 0x0F) == 0))
+			{
+				PORTB &= ~0x01;
+			}
+			else if ((ReceivedMIDIEvent.Event == MIDI_EVENT(1, MIDI_COMMAND_NOTE_OFF)) && ((ReceivedMIDIEvent.Data1 & 0x0F) == 0))
+			{
+				PORTB |= 0x01;
 			}
 		}
 

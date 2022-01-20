@@ -73,7 +73,8 @@ int main(void)
 		MIDI_EventPacket_t ReceivedMIDIEvent;
 		if (MIDI_Device_ReceiveEventPacket(&Keyboard_MIDI_Interface, &ReceivedMIDIEvent))
 		{
-			if ((ReceivedMIDIEvent.Event == MIDI_EVENT(0, MIDI_COMMAND_NOTE_ON)) && ((ReceivedMIDIEvent.Data1 & 0x0F) == 0))
+			//PORTB ^= 0x01;
+			if ((ReceivedMIDIEvent.Event == MIDI_EVENT(0, MIDI_COMMAND_NOTE_ON)) && ((ReceivedMIDIEvent.Data1 & 0x0F) == 0)) //This second part is the channel you idiot.
 			{
 				PORTD &= ~0x20;					
 			}
@@ -81,11 +82,11 @@ int main(void)
 			{
 				PORTD |= 0x20;
 			}
-			else if ((ReceivedMIDIEvent.Event == MIDI_EVENT(1, MIDI_COMMAND_NOTE_ON)) && ((ReceivedMIDIEvent.Data1 & 0x0F) == 0))
+			else if ((ReceivedMIDIEvent.Event == MIDI_EVENT(0, MIDI_COMMAND_NOTE_ON)) && ((ReceivedMIDIEvent.Data1 & 0x0F) == 1))
 			{
 				PORTB &= ~0x01;
 			}
-			else if ((ReceivedMIDIEvent.Event == MIDI_EVENT(1, MIDI_COMMAND_NOTE_OFF)) && ((ReceivedMIDIEvent.Data1 & 0x0F) == 0))
+			else if ((ReceivedMIDIEvent.Event == MIDI_EVENT(0, MIDI_COMMAND_NOTE_OFF)) && ((ReceivedMIDIEvent.Data1 & 0x0F) == 1))
 			{
 				PORTB |= 0x01;
 			}

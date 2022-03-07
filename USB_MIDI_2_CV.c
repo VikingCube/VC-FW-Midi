@@ -53,25 +53,22 @@ const uint8_t sins[] = {
  33,  34,  36,  37,  39,  40,  42,  44,  45,  47,  49,  51,
  52,  54,  56,  58,  60,  62,  63,  65,  67,  69,  71,  73,
  75,  77,  79,  81,  84,  86,  88,  90,  92,  94,  96,  98,
-101, 103, 105, 107, 109, 112, 114, 116, 118, 120, 123, 125,
-127
+101, 103, 105, 107, 109, 112, 114, 116, 118, 120, 123, 125
 };
 
-enum channel_mode_t { MIDI, VCO };
+enum channel_mode_t { MIDI, USBCO };
 
 struct t_config {
-	uint8_t 			config_magic_number; //This used to check if there is a config already in the eeprom
-	uint8_t 			number_of_channels;  //Default configuration 4 channels.
+	uint8_t 			config_magic_number; //This used to check if there is a config already in the eeprom - TODO
 	uint8_t 			velocity_mult; //By default Velocity is from 0-127, by setting this 1 we multiply the value by 2.
-	enum channel_mode_t mode;
+	enum channel_mode_t ch_mode[4];
 };
 
 //Okay kids never use globals. Except here, because I know what I'm doin' - said noone ever before
 struct t_config config = {
 	.config_magic_number = 42,
-	.number_of_channels  = 4,
 	.velocity_mult       = 0,
-	.mode				 = MIDI,
+	.ch_mode			 = {MIDI,MIDI,MIDI,MIDI},
 };
 /** LUFA MIDI Class driver interface configuration and state information. This structure is
  *  passed to all MIDI Class driver functions, so that multiple instances of the same class
@@ -182,35 +179,70 @@ int main(void)
 	SetupHardware();
 	GlobalInterruptEnable(); //Check if we need this for USB
 
+	//TODO this is only for testing
+	uint16_t cnt = 0, cnt2 = 1;
+	uint16_t delay = 0;
+//	clr_bit(PORTC, DACAB);
+//	CS_BUS &= ~(1 << 1);
+
 	for (;;)
 	{
 		MIDI_EventPacket_t ReceivedMIDIEvent;
 		if (MIDI_Device_ReceiveEventPacket(&Keyboard_MIDI_Interface, &ReceivedMIDIEvent))
 		{
 			uint8_t channel = ReceivedMIDIEvent.Data1 & 0x0F; //0-15
-			if (ReceivedMIDIEvent.Event == MIDI_EVENT(0, MIDI_COMMAND_NOTE_ON))
-			{
-				//Calculate the right chip / A||B from the channel, note Ableton counts from 1-16 - so what is 2 here that's 3 in Ableton
-				uint8_t dac = channel & 0b00000001;
-				uint8_t chip_cv  = (channel & 0b00000010) >> 1;
-				uint8_t chip_vel = chip_cv + 2;
+			if (channel < 4) { //We have only 4 channels
+			// MIDI MODE
+				if (config.ch_mode[channel] == MIDI) {
+					if (ReceivedMIDIEvent.Event == MIDI_EVENT(0, MIDI_COMMAND_NOTE_ON))
+					{
+						//Calculate the right chip / A||B from the channel, note Ableton counts from 1-16 - so what is 2 here that's 3 in Ableton
+						uint8_t dac = channel & 0b00000001;
+						uint8_t chip_cv  = (channel & 0b00000010) >> 1;
+						uint8_t chip_vel = chip_cv + 2;
 
-				//Set CV For the given channel [C3-C7 is the max range]
-				uint8_t midi_note = ReceivedMIDIEvent.Data2-60;
-				if ((midi_note >= 0) && (midi_note < 49)) {
-					set_analog_output(chip_cv,dac,vperoct[midi_note]);
+						//Set CV For the given channel [C3-C7 is the max range]
+						uint8_t midi_note = ReceivedMIDIEvent.Data2-60;
+						if ((midi_note >= 0) && (midi_note < 49)) {
+							set_analog_output(chip_cv,dac,vperoct[midi_note]);
+						}
+						//Set Velocity for the given channel
+						set_analog_output(chip_vel,dac,ReceivedMIDIEvent.Data3 << config.velocity_mult);
+						//Set the gate signal on
+						set_bit(GATE_BUS, channel);
+					}
+					else if (ReceivedMIDIEvent.Event == MIDI_EVENT(0, MIDI_COMMAND_NOTE_OFF))
+					{
+						//Clear the gate when the note goes off
+						clr_bit(GATE_BUS, channel);
+					}
 				}
-				//Set Velocity for the given channel
-				set_analog_output(chip_vel,dac,ReceivedMIDIEvent.Data3 << config.velocity_mult);
-				//Set the gate signal on
-				set_bit(GATE_BUS, channel);
-			}
-			else if (ReceivedMIDIEvent.Event == MIDI_EVENT(0, MIDI_COMMAND_NOTE_OFF))
-			{
-				//Clear the gate when the note goes off
-				clr_bit(GATE_BUS, channel);
+			// VCO MODE
+				if (config.ch_mode[channel] == USBCO) {
+					
+				}
 			}
 		}
+
+/*
+		//TODO This is only for testing
+		set_analog_output(1,0,sins[cnt]);
+		cnt+=4;
+		if (cnt >= 360) {
+			cnt = 0;
+		}
+*/
+		if (cnt == 1) {
+			cnt = 0;
+			set_analog_output(1,0,0);
+		} else {
+			cnt = 1;
+			set_analog_output(1,0,255);
+		}
+/*		DATA_BUS=sins[cnt];
+		cnt+=1;
+		if (cnt >= 360) cnt = 0;
+*/
 
 		MIDI_Device_USBTask(&Keyboard_MIDI_Interface);
 		USB_USBTask();

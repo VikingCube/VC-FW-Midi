@@ -164,7 +164,7 @@ int main(void)
 					set_analog_output(chip_cv,dac,vperoct[midi_note]);
 				}
 				//Set Velocity for the given channel
-				set_analog_output(chip_vel,dac,ReceivedMIDIEvent.Data3);
+				set_analog_output(chip_vel,dac,ReceivedMIDIEvent.Data3 << config.velocity_mult);
 				//Set the gate signal on
 				set_bit(GATE_BUS, channel);
 			}

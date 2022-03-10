@@ -187,52 +187,150 @@ int main(void)
 	SetupHardware();
 	GlobalInterruptEnable(); //Check if we need this for USB
 
+	//Variables for CH mode
 	uint8_t channel   = 0;
 	uint8_t dac 	  = 0;
 	uint8_t chip_cv   = 0;
 	uint8_t chip_vel  = 0;
 	uint8_t midi_note = 0;
-	//MIDI mode loop, we do this to minimaze the number of branches
-	for (;;)
-	{
-		//Handle prog button
-		if (bit_is_clear(PINE, PE2)) {
-			jump_boot();
-		}
-		MIDI_EventPacket_t ReceivedMIDIEvent;
-		if (MIDI_Device_ReceiveEventPacket(&Keyboard_MIDI_Interface, &ReceivedMIDIEvent))
+	
+	//Variables for poly mode
+	uint8_t ch_in_use[4] = {255, 255, 255, 255}; //255 stands for "used"
+	uint8_t gate 		 = 0;
+
+	for(;;) {
+		//4 channel mode loop, we do this to minimaze the number of branches
+		for (;;)
 		{
-			channel = ReceivedMIDIEvent.Data1 & 0x0F; //0-15
-			if (channel < 4) { //We have only 4 channels
-					switch (ReceivedMIDIEvent.Event) {
-						case MIDI_EVENT(0, MIDI_COMMAND_NOTE_ON):
-							//Calculate the right chip / A||B from the channel, note Ableton counts from 1-16 - so what is 2 here that's 3 in Ableton
-							dac = channel & 0b00000001;
-							chip_cv  = (channel & 0b00000010) >> 1;
-							chip_vel = chip_cv + 2;
-
-							//Set CV For the given channel [C3-C7 is the max range]
-							midi_note = ReceivedMIDIEvent.Data2-60;
-							if ((midi_note >= 0) && (midi_note < 49)) {
-								set_analog_output(chip_cv,dac,vperoct[midi_note]);
-							}
-							//Set Velocity for the given channel
-							set_analog_output(chip_vel,dac,ReceivedMIDIEvent.Data3 << config.velocity_mult);
-							//Set the gate signal on
-							if (channel > 1) channel+=2;
-							set_bit(GATE_BUS, channel);
-							break;
-
-						case MIDI_EVENT(0, MIDI_COMMAND_NOTE_OFF):
-							if (channel > 1) channel+=2;
-							//Clear the gate when the note goes off
-							clr_bit(GATE_BUS, channel);
-							break;
-					}
+			//Handle prog button
+			if (bit_is_clear(PINE, PE2)) {
+				jump_boot();
 			}
-		}
+			MIDI_EventPacket_t ReceivedMIDIEvent;
+			if (MIDI_Device_ReceiveEventPacket(&Keyboard_MIDI_Interface, &ReceivedMIDIEvent))
+			{
+				channel = ReceivedMIDIEvent.Data1 & 0x0F; //0-15
+				if (channel == 4) break; //Channel 5 means we switch to poly mode
+				if (channel < 4) { //We have only 4 channels
+						switch (ReceivedMIDIEvent.Event) {
+							case MIDI_EVENT(0, MIDI_COMMAND_NOTE_ON):
+								//Calculate the right chip / A||B from the channel, note Ableton counts from 1-16 - so what is 2 here that's 3 in Ableton
+								dac = channel & 0b00000001;
+								chip_cv  = (channel & 0b00000010) >> 1;
+								chip_vel = chip_cv + 2;
 
-		MIDI_Device_USBTask(&Keyboard_MIDI_Interface);
-		USB_USBTask();
+								//Set CV For the given channel [C3-C7 is the max range]
+								midi_note = ReceivedMIDIEvent.Data2-60;
+								if ((midi_note >= 0) && (midi_note < 49)) {
+									set_analog_output(chip_cv,dac,vperoct[midi_note]);
+								}
+								//Set Velocity for the given channel
+								set_analog_output(chip_vel,dac,ReceivedMIDIEvent.Data3 << config.velocity_mult);
+								//Set the gate signal on
+								if (channel > 1) channel+=2;
+								set_bit(GATE_BUS, channel);
+								break;
+
+							case MIDI_EVENT(0, MIDI_COMMAND_NOTE_OFF):
+								if (channel > 1) channel+=2;
+								//Clear the gate when the note goes off
+								clr_bit(GATE_BUS, channel);
+								break;
+						}
+				}
+			}
+
+			MIDI_Device_USBTask(&Keyboard_MIDI_Interface);
+			USB_USBTask();
+		}
+		//************************************************************************************************************************
+		//Poly mode loop
+		for (;;)
+		{
+			//Handle prog button
+			if (bit_is_clear(PINE, PE2)) {
+				jump_boot();
+			}
+			MIDI_EventPacket_t ReceivedMIDIEvent;
+			if (MIDI_Device_ReceiveEventPacket(&Keyboard_MIDI_Interface, &ReceivedMIDIEvent))
+			{
+				channel = ReceivedMIDIEvent.Data1 & 0x0F; //0-15
+				if (channel < 4) {  //if CH1-4 used we switch back to 4 channel mode
+					//Free up channels
+					for ( int i = 0 ; i < 4 ; i++ ) {
+						ch_in_use[i] = 255;
+					}
+					//Set all gates low
+					GATE_BUS = 0x00;
+					break;
+				}
+				if (channel == 4) { //Above 4 we ignore
+						switch (ReceivedMIDIEvent.Event) {
+							case MIDI_EVENT(0, MIDI_COMMAND_NOTE_ON):
+								//Look for a free channel
+								for ( int i = 0 ; i < 4 ; i++ ) {
+									if (ch_in_use[i] == 255) {
+										//We have a free channel, let's use it
+										midi_note = ReceivedMIDIEvent.Data2-60;
+										ch_in_use[i] = midi_note;
+										switch (i)
+										{
+											case 0:
+												dac 	  = 0;
+												chip_cv   = 0;
+												chip_vel  = 2;
+												break;
+											case 1:
+												dac 	  = 1;
+												chip_cv   = 0;
+												chip_vel  = 2;
+												break;
+											case 2:
+												dac 	  = 0;
+												chip_cv   = 1;
+												chip_vel  = 3;
+												break;
+											case 3:
+												dac 	  = 1;
+												chip_cv   = 1;
+												chip_vel  = 3;
+												break;
+										}
+										if ((midi_note >= 0) && (midi_note < 49)) {
+											set_analog_output(chip_cv,dac,vperoct[midi_note]);
+										}
+										//Set Velocity for the given channel
+										set_analog_output(chip_vel,dac,ReceivedMIDIEvent.Data3 << config.velocity_mult);
+										gate = i;
+										if (gate > 1) gate+=2;
+										set_bit(GATE_BUS, gate);
+										break;
+									}
+								}
+								break;
+
+							case MIDI_EVENT(0, MIDI_COMMAND_NOTE_OFF):
+								//Find the channel used for this note
+								midi_note = ReceivedMIDIEvent.Data2-60;
+								for ( int i = 0 ; i < 4; i++ ) {
+									if (ch_in_use[i] == midi_note) {
+										//Found it!
+										gate = i;
+										if (gate > 1) gate+=2;
+										//Clear the gate when the note goes off
+										clr_bit(GATE_BUS, gate);
+										//Free up the channel
+										ch_in_use[i] = 255;
+										break;
+									}
+								}
+								break;
+						}
+				}
+			}
+
+			MIDI_Device_USBTask(&Keyboard_MIDI_Interface);
+			USB_USBTask();
+		}
 	}
 }

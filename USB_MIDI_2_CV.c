@@ -163,12 +163,12 @@ void set_analog_output(uint8_t chip, uint8_t dacab, uint8_t  value)
 
 void EVENT_USB_Device_Connect(void)
 {
-	//TODO turn on LED
+	set_bit(PORTB,PB7);
 }
 
 void EVENT_USB_Device_Disconnect(void)
 {
-	//TODO turn off LED
+	clr_bit(PORTB,PB7);
 }
 
 void EVENT_USB_Device_ConfigurationChanged(void)
@@ -187,6 +187,9 @@ int main(void)
 	SetupHardware();
 	GlobalInterruptEnable(); //Check if we need this for USB
 
+	//Set power LED
+	set_bit(PORTB, PB6);
+
 	//Variables for CH mode
 	uint8_t channel   = 0;
 	uint8_t dac 	  = 0;
@@ -198,17 +201,28 @@ int main(void)
 	uint8_t ch_in_use[4] = {255, 255, 255, 255}; //255 stands for "used"
 	uint8_t gate 		 = 0;
 
+	//var for data led
+	uint16_t datacnt = 0;
 	for(;;) {
 		//4 channel mode loop, we do this to minimaze the number of branches
 		for (;;)
 		{
+			if (datacnt >= 3200) {
+				clr_bit(PORTB, PB5);
+				datacnt = 0;
+			}
+			++datacnt;
 			//Handle prog button
 			if (bit_is_clear(PINE, PE2)) {
+				clr_bit(PORTB,PB7);
+				clr_bit(PORTB,PB6);
+				set_bit(PORTB,PB5);
 				jump_boot();
 			}
 			MIDI_EventPacket_t ReceivedMIDIEvent;
 			if (MIDI_Device_ReceiveEventPacket(&Keyboard_MIDI_Interface, &ReceivedMIDIEvent))
 			{
+				set_bit(PORTB,PB5);
 				channel = ReceivedMIDIEvent.Data1 & 0x0F; //0-15
 				if (channel == 4) break; //Channel 5 means we switch to poly mode
 				if (channel < 4) { //We have only 4 channels
@@ -247,13 +261,22 @@ int main(void)
 		//Poly mode loop
 		for (;;)
 		{
+			if (datacnt >= 3200) {
+				clr_bit(PORTB, PB5);
+				datacnt = 0;
+			}
+			++datacnt;
 			//Handle prog button
 			if (bit_is_clear(PINE, PE2)) {
+				clr_bit(PORTB,PB7);
+				clr_bit(PORTB,PB6);
+				set_bit(PORTB,PB5);
 				jump_boot();
 			}
 			MIDI_EventPacket_t ReceivedMIDIEvent;
 			if (MIDI_Device_ReceiveEventPacket(&Keyboard_MIDI_Interface, &ReceivedMIDIEvent))
 			{
+				set_bit(PORTB,PB5);
 				channel = ReceivedMIDIEvent.Data1 & 0x0F; //0-15
 				if (channel < 4) {  //if CH1-4 used we switch back to 4 channel mode
 					//Free up channels

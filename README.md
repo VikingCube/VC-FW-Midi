@@ -8,4 +8,5 @@ built with LUFA210130, just get this under Projects subfolder and make it ;)
 Special thanks for LUFA for making the awesome work for all of us be able to USB the hell out of the atmega32u4.
 
 # Legal
-this code is free to use, modify, buy, sell whatsoever, and comes with 0 guarantee - hope you understand that I won't take any responsibility for your actions.
+You are free to download, build, modify VikingCube Midi with absolutely no fee and any kind of guarantee. We believe in the mindset of opensource - if you like please
+mark the source with references for this repositroy or our website: www.vikingcube.com

@@ -1,3 +1,5 @@
+https://vikingcube.com/vikingcube/vikingcube-midi/
+
 # vc_usb_midi_2_cv
 Firmware for VikingCube Midi
 
